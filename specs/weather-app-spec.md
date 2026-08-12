@@ -120,6 +120,36 @@ Os critérios abaixo são verificáveis e cobrem todos os requisitos funcionais 
 - Dado que Ana acessa a previsão de sua cidade em um celular, quando os dados são carregados, então vê máximas, mínimas e descrição climática para cada um dos cinco dias.
 - A previsão pode ser compreendida e comparada sem zoom manual ou interação que esconda os dados de outro dia.
 
+### AC-11 — Validação de entrada de busca (`RR-01`)
+
+- Dado que o usuário digita menos de 2 caracteres após remover espaços, quando tenta buscar, então a aplicação não dispara a consulta e exibe uma mensagem de validação.
+- Dado que o usuário digita apenas caracteres inválidos, como símbolos ou emojis, quando tenta buscar, então o sistema informa que a cidade informada não é válida.
+- Dado que o usuário informa um nome de cidade com acento ou hífen, quando a busca é iniciada, então o sistema trata corretamente a entrada e executa a consulta.
+
+### AC-12 — Timeout, retry e falha de API (`RR-03`, `RR-04`, `FR-06`)
+
+- Dado que uma requisição de geocodificação ou clima excede 10 segundos, quando o timeout ocorre, então a aplicação exibe uma mensagem de erro e a ação de tentar novamente.
+- Dado que a API falha por indisponibilidade ou erro de rede, quando a resposta é recebida, então a tela apresenta o erro sem bloquear a interface.
+- Quando o usuário seleciona “Tentar novamente”, então uma nova consulta é iniciada e um indicador de carregamento é exibido novamente.
+
+### AC-13 — Resposta parcial e concorrência (`RR-04`, `RR-05`, `RR-06`)
+
+- Dado que a API retorna dados incompletos para clima atual ou previsão, quando a resposta é processada, então a aplicação não renderiza dados inválidos e exibe mensagem de indisponibilidade.
+- Dado que o usuário inicia uma segunda busca antes da primeira terminar, quando a segunda resposta chega, então os dados da segunda cidade prevalecem e os dados da primeira não são exibidos.
+- Dado que a busca falhar após uma cidade já ter sido carregada, quando o usuário tenta novamente, então a aplicação mantém o estado anterior apenas como contexto histórico e não como dado atual válido.
+
+### AC-14 — Contratos de dados da API (`RR-09`, `RR-10`)
+
+- Dado que a API de geocodificação retorna um payload sem os campos mínimos exigidos, quando a resposta for validada, então a aplicação rejeita a resposta e exibe erro de dados indisponíveis.
+- Dado que a API de clima retorna um payload sem os campos obrigatórios, quando a resposta for processada, então a aplicação não renderiza dados parciais e apresenta mensagem de indisponibilidade.
+- Dado que a API retorna pelo menos os campos obrigatórios, quando a renderização inicia, então a interface apresenta os dados esperados sem erros de layout.
+
+### AC-15 — Mensagens finais padronizadas (`RR-11`)
+
+- Dado que o usuário tenta buscar com campo vazio, quando a validação acontece, então a aplicação exibe “Digite o nome de uma cidade.”
+- Dado que a busca não encontra resultados, quando a resposta chega, então a aplicação exibe “Nenhuma cidade encontrada.”
+- Dado que a API falha ou excede o timeout, quando o erro é capturado, então a aplicação exibe a mensagem correspondente à falha sem deixar a tela bloqueada.
+
 ## Non-Functional Requirements
 
 ### NFR-01 — Usabilidade
@@ -180,6 +210,82 @@ Os critérios abaixo são verificáveis e cobrem todos os requisitos funcionais 
 - Falha ao carregar uma nova cidade após uma consulta bem-sucedida: preservar, quando apropriado, o contexto anterior sem apresentá-lo como resultado da nova cidade e indicar o erro da nova consulta.
 - Viewport estreita de 320 px: não permitir que textos, controles ou cartões causem sobreposição ou rolagem horizontal para as tarefas principais.
 - Navegação por teclado ou tecnologia assistiva: resultados, controle de unidade, mensagens e ação de nova tentativa devem permanecer alcançáveis e compreensíveis.
+
+## Requisitos complementares para reduzir ambiguidade e facilitar validação
+
+### RR-01 — Validação da busca
+
+- A busca deve considerar como entrada inválida qualquer valor que, após remover espaços em branco, tenha menos de 2 caracteres.
+- A aplicação deve aceitar letras, letras com acento, espaços e hífen, mas rejeitar entradas compostas apenas por pontuação, símbolos ou emojis.
+- Se a entrada for inválida, o sistema não deve disparar a requisição de geocodificação e deve mostrar uma mensagem de orientação em português do Brasil, como “Digite o nome de uma cidade”.
+
+### RR-02 — Relevância e ordenação dos resultados
+
+- A ordenação dos resultados deve priorizar correspondências exatas por nome da cidade, seguida por cidades com maior proximidade geográfica e maior contexto regional (estado/país).
+- Quando houver mais de cinco resultados relevantes, a interface deve mostrar no máximo cinco itens, mantendo a ordem de maior relevância para menor.
+- Cidades com nomes iguais em diferentes regiões devem permanecer distintas quando a fonte de dados fornecer contexto suficiente, como estado, região ou país.
+
+### RR-03 — Timeout e retry
+
+- O timeout de cada requisição de geocodificação ou previsão deve ser de 10 segundos.
+- Quando a requisição exceder o tempo limite, a aplicação deve mostrar uma mensagem de erro específica e permitir uma nova tentativa via ação explícita.
+- A primeira tentativa falha não deve bloquear a interface; o usuário pode executar uma nova busca ou repetir a consulta imediatamente.
+
+### RR-04 — Validação de resposta da API
+
+- A aplicação deve validar todos os campos críticos antes de renderizar qualquer dado climático.
+- Se a API retornar campos obrigatórios ausentes, nulos ou em formato inválido, a aplicação deve exibir um estado de erro em vez de apresentar dados incompletos como válidos.
+- A interface deve mostrar “Dados climáticos indisponíveis” quando a resposta não contiver os valores necessários para clima atual ou previsão.
+
+### RR-05 — Concorrência e sincronização de consultas
+
+- Quando o usuário inicia uma nova busca enquanto uma anterior ainda está carregando, a requisição mais recente deve ter prioridade sobre a anterior.
+- Dados de consultas antigas não devem substituir os dados da cidade atual em execução.
+- A interface deve evitar que dados de busca concorrente sejam misturados em um único estado visual.
+
+### RR-06 — Fallback e dados antigos
+
+- A aplicação não deve exibir dados de uma consulta anterior como se fossem atuais após uma falha ou mudança de cidade.
+- Quando houver dados recentes em cache e a busca falhar, o sistema pode mostrar um aviso de indisponibilidade sem apresentar os dados como válidos.
+- O status visual deve indicar claramente se os dados são atuais ou não.
+
+### RR-07 — Conversão de temperatura
+
+- A conversão entre Celsius e Fahrenheit deve seguir a fórmula: $F = (C \times 9/5) + 32$.
+- Os valores exibidos na interface devem ser arredondados para o inteiro mais próximo.
+- A alternância de unidade deve alterar todas as temperaturas visíveis imediatamente, sem recarregar a página ou iniciar uma nova requisição.
+
+### RR-08 — Mensagens e estados visuais
+
+- Todos os estados de erro, vazio e carregamento devem apresentar texto em português do Brasil.
+- Mensagens de erro e ausência de resultados devem ser acessíveis por leitores de tela e permanecer visíveis sem ocultar o conteúdo principal.
+- A ação de retry deve ser identificável por nome acessível e deve permanecer funcional mesmo em telas pequenas.
+
+### RR-09 — Contrato de dados da API de geocodificação
+
+- A aplicação deve consumir a API de geocodificação do Open-Meteo para buscar cidades por nome.
+- Para cada resultado válido, o sistema deve exigir pelo menos os campos `name`, `country`, e `latitude` e `longitude`.
+- Quando o resultado vier com `state`, `admin1` ou `region`, o sistema deve usar esse dado para enriquecer a label visual da cidade.
+- A interface deve exibir cada cidade como um item de seleção com: nome da cidade, contexto regional e país, quando disponíveis.
+- A resposta abaixo do mínimo de campos obrigatórios deve ser tratada como resposta inválida.
+
+### RR-10 — Contrato de dados da API de clima
+
+- A aplicação deve consumir os dados de clima atual e previsão do Open-Meteo.
+- A consulta de clima atual deve exigir pelo menos: `current.temperature_2m`, `current.relative_humidity_2m`, `current.wind_speed_10m`, `current.weather_code` e `current.time`.
+- A previsão de cinco dias deve exigir pelo menos: `daily.time`, `daily.temperature_2m_max`, `daily.temperature_2m_min`, `daily.weather_code`.
+- Se algum campo obrigatório estiver ausente, a aplicação deve tratar os dados como incompletos e apresentar erro.
+- Quando a previsão for incompleta, o sistema deve mostrar mensagem de “Previsão indisponível” e evitar renderizar dias vazios ou inventados.
+
+### RR-11 — Mensagens finais padronizadas
+
+- Cidade inexistente: “Nenhuma cidade encontrada.”
+- Input vazio: “Digite o nome de uma cidade.”
+- Entrada inválida por caracteres: “Informe uma cidade válida.”
+- Falha de rede/servidor: “Não foi possível carregar os dados no momento. Tente novamente.”
+- Timeout: “A busca demorou mais do que o esperado. Tente novamente.”
+- Dados incompletos: “Dados climáticos indisponíveis.”
+- Previsão incompleta: “Previsão indisponível para esta cidade.”
 
 ## Assumptions
 
